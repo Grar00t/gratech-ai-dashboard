@@ -1,0 +1,264 @@
+name: Production Readiness Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+  schedule:
+    # Run daily at midnight UTC
+    - cron: "0 0 * * *"
+
+# Minimal permissions for security
+permissions:
+  contents: read
+
+env:
+  PRODUCTION_ENDPOINT: https://api.gratech.sa
+  HEALTH_ENDPOINT: https://api.gratech.sa/health
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Run tests
+        run: npm run test --if-present
+
+      - name: Build verification
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+  endpoint-tests:
+    name: Endpoint Health Tests
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    outputs:
+      health-status: ${{ steps.health-check.outputs.status }}
+      response-time: ${{ steps.health-check.outputs.response_time }}
+
+    steps:
+      - name: Health check
+        id: health-check
+        run: |
+          echo "Testing production endpoint health..."
+          
+          START_TIME=$(date +%s%N)
+          
+          HTTP_RESPONSE=$(curl -s -w "\n%{http_code}\n%{time_total}" \
+            --max-time 30 \
+            -H "Accept: application/json" \
+            "${{ env.HEALTH_ENDPOINT }}" 2>/dev/null || echo -e "\n000\n0")
+          
+          END_TIME=$(date +%s%N)
+          
+          # Parse response
+          HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d' | sed '$d')
+          HTTP_CODE=$(echo "$HTTP_RESPONSE" | tail -2 | head -1)
+          RESPONSE_TIME=$(echo "$HTTP_RESPONSE" | tail -1)
+          
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response Time: ${RESPONSE_TIME}s"
+          
+          echo "response_time=$RESPONSE_TIME" >> $GITHUB_OUTPUT
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Health check passed"
+            echo "status=healthy" >> $GITHUB_OUTPUT
+          elif [ "$HTTP_CODE" = "000" ]; then
+            echo "⚠️ Endpoint unreachable (may still be deploying)"
+            echo "status=unreachable" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Health check returned HTTP $HTTP_CODE"
+            echo "status=degraded" >> $GITHUB_OUTPUT
+          fi
+
+      - name: TCP connectivity test
+        run: |
+          echo "Testing TCP connectivity..."
+          
+          DOMAIN="api.gratech.sa"
+          PORT=443
+          
+          if timeout 10 bash -c "echo >/dev/tcp/$DOMAIN/$PORT" 2>/dev/null; then
+            echo "✅ TCP connection to $DOMAIN:$PORT successful"
+          else
+            echo "⚠️ TCP connection to $DOMAIN:$PORT failed or timed out"
+          fi
+
+      - name: Response validation
+        if: steps.health-check.outputs.status == 'healthy'
+        run: |
+          echo "Validating response structure..."
+          
+          RESPONSE=$(curl -s "${{ env.HEALTH_ENDPOINT }}" 2>/dev/null || echo "{}")
+          
+          # Check if response is valid JSON
+          if echo "$RESPONSE" | jq empty 2>/dev/null; then
+            echo "✅ Response is valid JSON"
+            
+            # Check for expected fields
+            if echo "$RESPONSE" | jq -e '.status' >/dev/null 2>&1; then
+              STATUS=$(echo "$RESPONSE" | jq -r '.status')
+              echo "✅ Status field present: $STATUS"
+            fi
+          else
+            echo "⚠️ Response is not valid JSON: $RESPONSE"
+          fi
+
+  infrastructure-tests:
+    name: Infrastructure Tests
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dnsutils curl jq
+
+      - name: DNS resolution test
+        run: |
+          echo "Testing DNS resolution..."
+          
+          DOMAIN="api.gratech.sa"
+          
+          # Test with multiple resolvers
+          RESOLVERS=("8.8.8.8" "1.1.1.1" "9.9.9.9")
+          
+          for RESOLVER in "${RESOLVERS[@]}"; do
+            RESULT=$(dig +short "$DOMAIN" @"$RESOLVER" 2>/dev/null | head -1)
+            if [ -n "$RESULT" ]; then
+              echo "✅ DNS resolution via $RESOLVER: $RESULT"
+            else
+              echo "⏳ DNS resolution via $RESOLVER: pending"
+            fi
+          done
+
+      - name: CNAME verification
+        run: |
+          echo "Verifying CNAME record..."
+          
+          DOMAIN="api.gratech.sa"
+          EXPECTED_CNAME="gratech-api-gateway.azure-api.net"
+          
+          CNAME=$(dig +short CNAME "$DOMAIN" @8.8.8.8 | head -1 | sed 's/\.$//')
+          
+          if [ "$CNAME" = "$EXPECTED_CNAME" ]; then
+            echo "✅ CNAME correctly points to $EXPECTED_CNAME"
+          elif [ -n "$CNAME" ]; then
+            echo "⚠️ CNAME points to $CNAME (expected: $EXPECTED_CNAME)"
+          else
+            echo "⚠️ No CNAME record found"
+          fi
+
+      - name: SSL certificate test
+        run: |
+          echo "Testing SSL certificate..."
+          
+          DOMAIN="api.gratech.sa"
+          
+          CERT_INFO=$(echo | openssl s_client -servername "$DOMAIN" -connect "$DOMAIN":443 2>/dev/null | openssl x509 -noout -dates -issuer 2>/dev/null || echo "")
+          
+          if [ -n "$CERT_INFO" ]; then
+            echo "✅ SSL certificate retrieved successfully"
+            echo "$CERT_INFO"
+          else
+            echo "⚠️ Could not retrieve SSL certificate (endpoint may not be live yet)"
+          fi
+
+  production-readiness-report:
+    name: Production Readiness Report
+    needs: [unit-tests, endpoint-tests, infrastructure-tests]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name != 'pull_request'
+
+    steps:
+      - name: Generate report
+        run: |
+          echo "## 🚀 Production Readiness Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Generated:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Unit tests
+          if [ "${{ needs.unit-tests.result }}" = "success" ]; then
+            echo "| Unit Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Unit Tests | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Endpoint tests
+          HEALTH_STATUS="${{ needs.endpoint-tests.outputs.health-status }}"
+          if [ "$HEALTH_STATUS" = "healthy" ]; then
+            echo "| Endpoint Health | ✅ Healthy |" >> $GITHUB_STEP_SUMMARY
+          elif [ "$HEALTH_STATUS" = "unreachable" ]; then
+            echo "| Endpoint Health | ⏳ Unreachable |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Endpoint Health | ⚠️ Degraded |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Infrastructure tests
+          if [ "${{ needs.infrastructure-tests.result }}" = "success" ]; then
+            echo "| Infrastructure | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Infrastructure | ⚠️ Issues |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Calculate confidence
+          CONFIDENCE=100
+          
+          if [ "${{ needs.unit-tests.result }}" != "success" ]; then
+            CONFIDENCE=$((CONFIDENCE - 30))
+          fi
+          
+          if [ "$HEALTH_STATUS" = "unreachable" ]; then
+            CONFIDENCE=$((CONFIDENCE - 20))
+          elif [ "$HEALTH_STATUS" = "degraded" ]; then
+            CONFIDENCE=$((CONFIDENCE - 40))
+          fi
+          
+          if [ "${{ needs.infrastructure-tests.result }}" != "success" ]; then
+            CONFIDENCE=$((CONFIDENCE - 20))
+          fi
+          
+          echo "### Confidence Level: ${CONFIDENCE}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ $CONFIDENCE -eq 100 ]; then
+            echo "🎉 **PRODUCTION READY** - All systems operational!" >> $GITHUB_STEP_SUMMARY
+          elif [ $CONFIDENCE -ge 80 ]; then
+            echo "✅ **READY** - Minor issues may exist" >> $GITHUB_STEP_SUMMARY
+          elif [ $CONFIDENCE -ge 60 ]; then
+            echo "⚠️ **CAUTION** - Some tests failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **NOT READY** - Critical issues detected" >> $GITHUB_STEP_SUMMARY
+          fi

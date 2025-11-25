@@ -1,0 +1,276 @@
+name: DNS and SSL Verification
+
+on:
+  schedule:
+    # Run every 6 hours to monitor DNS and SSL status
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Domain to verify"
+        required: false
+        default: "api.gratech.sa"
+
+# Minimal permissions for security
+permissions:
+  contents: read
+
+env:
+  PRIMARY_DOMAIN: api.gratech.sa
+  CNAME_TARGET: gratech-api-gateway.azure-api.net
+  SSL_EXPIRY_WARNING_DAYS: 30
+
+jobs:
+  dns-verification:
+    name: DNS Verification
+    runs-on: ubuntu-latest
+    outputs:
+      dns-status: ${{ steps.dns-check.outputs.status }}
+      cname-record: ${{ steps.cname-check.outputs.record }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install DNS tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dnsutils jq
+
+      - name: Check CNAME record
+        id: cname-check
+        run: |
+          DOMAIN="${{ github.event.inputs.domain || env.PRIMARY_DOMAIN }}"
+          echo "Checking CNAME record for $DOMAIN..."
+          
+          CNAME=$(dig +short CNAME "$DOMAIN" @8.8.8.8 | head -1 | sed 's/\.$//')
+          
+          if [ -z "$CNAME" ]; then
+            echo "⚠️ No CNAME record found for $DOMAIN"
+            echo "record=" >> $GITHUB_OUTPUT
+            echo "status=missing" >> $GITHUB_OUTPUT
+          elif [ "$CNAME" = "${{ env.CNAME_TARGET }}" ]; then
+            echo "✅ CNAME record is correctly configured: $CNAME"
+            echo "record=$CNAME" >> $GITHUB_OUTPUT
+            echo "status=valid" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ CNAME record mismatch. Expected: ${{ env.CNAME_TARGET }}, Got: $CNAME"
+            echo "record=$CNAME" >> $GITHUB_OUTPUT
+            echo "status=mismatch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: DNS propagation check
+        id: dns-check
+        run: |
+          DOMAIN="${{ github.event.inputs.domain || env.PRIMARY_DOMAIN }}"
+          echo "Checking DNS propagation across multiple resolvers..."
+          
+          RESOLVERS=(
+            "8.8.8.8:Google"
+            "1.1.1.1:Cloudflare"
+            "208.67.222.222:OpenDNS"
+            "156.154.70.1:Neustar"
+            "9.9.9.9:Quad9"
+            "64.6.64.6:Verisign"
+          )
+          
+          RESOLVED_COUNT=0
+          TOTAL_COUNT=${#RESOLVERS[@]}
+          
+          echo "## DNS Propagation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resolver | Provider | Status | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          for RESOLVER_INFO in "${RESOLVERS[@]}"; do
+            RESOLVER="${RESOLVER_INFO%%:*}"
+            PROVIDER="${RESOLVER_INFO##*:}"
+            
+            RESULT=$(dig +short "$DOMAIN" @"$RESOLVER" 2>/dev/null | head -1)
+            
+            if [ -n "$RESULT" ]; then
+              echo "| $RESOLVER | $PROVIDER | ✅ Resolved | $RESULT |" >> $GITHUB_STEP_SUMMARY
+              ((RESOLVED_COUNT++))
+            else
+              echo "| $RESOLVER | $PROVIDER | ⏳ Pending | - |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          PERCENTAGE=$((RESOLVED_COUNT * 100 / TOTAL_COUNT))
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Propagation: $RESOLVED_COUNT/$TOTAL_COUNT ($PERCENTAGE%)**" >> $GITHUB_STEP_SUMMARY
+          
+          if [ $PERCENTAGE -ge 80 ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+          elif [ $PERCENTAGE -ge 50 ]; then
+            echo "status=propagating" >> $GITHUB_OUTPUT
+          else
+            echo "status=pending" >> $GITHUB_OUTPUT
+          fi
+
+  ssl-verification:
+    name: SSL Certificate Verification
+    runs-on: ubuntu-latest
+    outputs:
+      ssl-status: ${{ steps.ssl-check.outputs.status }}
+      days-remaining: ${{ steps.ssl-check.outputs.days }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install SSL tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssl
+
+      - name: Check SSL certificate
+        id: ssl-check
+        run: |
+          DOMAIN="${{ github.event.inputs.domain || env.PRIMARY_DOMAIN }}"
+          echo "Checking SSL certificate for $DOMAIN..."
+          
+          # Get certificate expiry date
+          CERT_INFO=$(echo | openssl s_client -servername "$DOMAIN" -connect "$DOMAIN":443 2>/dev/null | openssl x509 -noout -dates 2>/dev/null || echo "")
+          
+          if [ -z "$CERT_INFO" ]; then
+            echo "⚠️ Could not retrieve SSL certificate for $DOMAIN"
+            echo "status=unreachable" >> $GITHUB_OUTPUT
+            echo "days=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          EXPIRY_DATE=$(echo "$CERT_INFO" | grep 'notAfter' | cut -d= -f2)
+          
+          if [ -z "$EXPIRY_DATE" ]; then
+            echo "⚠️ Could not parse certificate expiry date"
+            echo "status=error" >> $GITHUB_OUTPUT
+            echo "days=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Use openssl to get expiry in epoch format directly for portability
+          EXPIRY_EPOCH=$(echo | openssl s_client -servername "$DOMAIN" -connect "$DOMAIN":443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 | xargs -I {} date -d {} +%s 2>/dev/null || echo "0")
+          CURRENT_EPOCH=$(date +%s)
+          
+          if [ "$EXPIRY_EPOCH" = "0" ] || [ -z "$EXPIRY_EPOCH" ]; then
+            # Fallback: try to parse the date string directly
+            EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s 2>/dev/null || echo "0")
+          fi
+          
+          if [ "$EXPIRY_EPOCH" = "0" ] || [ -z "$EXPIRY_EPOCH" ]; then
+            echo "⚠️ Could not calculate days remaining"
+            DAYS_REMAINING=0
+          else
+            DAYS_REMAINING=$(( (EXPIRY_EPOCH - CURRENT_EPOCH) / 86400 ))
+          fi
+          
+          echo "days=$DAYS_REMAINING" >> $GITHUB_OUTPUT
+          
+          echo "## SSL Certificate Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Domain | $DOMAIN |" >> $GITHUB_STEP_SUMMARY
+          echo "| Expiry Date | $EXPIRY_DATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Days Remaining | $DAYS_REMAINING |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ $DAYS_REMAINING -lt 0 ]; then
+            echo "❌ Certificate has EXPIRED!"
+            echo "status=expired" >> $GITHUB_OUTPUT
+            echo "| Status | ❌ EXPIRED |" >> $GITHUB_STEP_SUMMARY
+          elif [ $DAYS_REMAINING -lt ${{ env.SSL_EXPIRY_WARNING_DAYS }} ]; then
+            echo "⚠️ Certificate expires in $DAYS_REMAINING days - renewal recommended"
+            echo "status=warning" >> $GITHUB_OUTPUT
+            echo "| Status | ⚠️ Expiring Soon |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Certificate is valid for $DAYS_REMAINING days"
+            echo "status=valid" >> $GITHUB_OUTPUT
+            echo "| Status | ✅ Valid |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check certificate chain
+        run: |
+          DOMAIN="${{ github.event.inputs.domain || env.PRIMARY_DOMAIN }}"
+          echo "Verifying certificate chain for $DOMAIN..."
+          
+          CHAIN_OUTPUT=$(echo | openssl s_client -servername "$DOMAIN" -connect "$DOMAIN":443 -showcerts 2>/dev/null || echo "")
+          
+          if echo "$CHAIN_OUTPUT" | grep -q "Verify return code: 0"; then
+            echo "✅ Certificate chain verified successfully"
+          else
+            echo "⚠️ Certificate chain verification may have issues"
+          fi
+
+  production-readiness:
+    name: Production Readiness Check
+    needs: [dns-verification, ssl-verification]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Evaluate readiness
+        id: readiness
+        run: |
+          DNS_STATUS="${{ needs.dns-verification.outputs.dns-status }}"
+          SSL_STATUS="${{ needs.ssl-verification.outputs.ssl-status }}"
+          SSL_DAYS="${{ needs.ssl-verification.outputs.days-remaining }}"
+          CNAME_RECORD="${{ needs.dns-verification.outputs.cname-record }}"
+          
+          CONFIDENCE=100
+          ISSUES=""
+          
+          # Check DNS
+          if [ "$DNS_STATUS" != "healthy" ]; then
+            CONFIDENCE=$((CONFIDENCE - 20))
+            ISSUES="${ISSUES}\n- DNS propagation incomplete"
+          fi
+          
+          # Check CNAME
+          if [ -z "$CNAME_RECORD" ] || [ "$CNAME_RECORD" != "${{ env.CNAME_TARGET }}" ]; then
+            CONFIDENCE=$((CONFIDENCE - 30))
+            ISSUES="${ISSUES}\n- CNAME record misconfigured"
+          fi
+          
+          # Check SSL
+          if [ "$SSL_STATUS" = "expired" ]; then
+            CONFIDENCE=$((CONFIDENCE - 50))
+            ISSUES="${ISSUES}\n- SSL certificate expired"
+          elif [ "$SSL_STATUS" = "warning" ]; then
+            CONFIDENCE=$((CONFIDENCE - 10))
+            ISSUES="${ISSUES}\n- SSL certificate expiring soon (${SSL_DAYS} days)"
+          elif [ "$SSL_STATUS" = "unreachable" ]; then
+            CONFIDENCE=$((CONFIDENCE - 30))
+            ISSUES="${ISSUES}\n- SSL endpoint unreachable"
+          fi
+          
+          echo "## Production Readiness Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Confidence Level: ${CONFIDENCE}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ $CONFIDENCE -eq 100 ]; then
+            echo "✅ **PRODUCTION READY** - All checks passed!" >> $GITHUB_STEP_SUMMARY
+            echo "status=ready" >> $GITHUB_OUTPUT
+          elif [ $CONFIDENCE -ge 70 ]; then
+            echo "⚠️ **MOSTLY READY** - Minor issues detected" >> $GITHUB_STEP_SUMMARY
+            echo "status=warning" >> $GITHUB_OUTPUT
+          else
+            echo "❌ **NOT READY** - Critical issues detected" >> $GITHUB_STEP_SUMMARY
+            echo "status=critical" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ -n "$ISSUES" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Issues Detected:" >> $GITHUB_STEP_SUMMARY
+            echo -e "$ISSUES" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "confidence=$CONFIDENCE" >> $GITHUB_OUTPUT
+
+      - name: Create status badge data
+        run: |
+          CONFIDENCE="${{ steps.readiness.outputs.confidence }}"
+          STATUS="${{ steps.readiness.outputs.status }}"
+          
+          # This could be used to update a status badge
+          echo "Production Readiness: ${CONFIDENCE}% (${STATUS})"
