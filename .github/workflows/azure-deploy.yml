@@ -119,6 +119,14 @@ jobs:
       url: ${{ steps.deploy.outputs.webapp-url }}
 
     steps:
+      # Azure credentials should be a JSON object with the following structure:
+      # {
+      #   "clientId": "<service-principal-app-id>",
+      #   "clientSecret": "<service-principal-password>",
+      #   "subscriptionId": "<azure-subscription-id>",
+      #   "tenantId": "<azure-tenant-id>"
+      # }
+      # Create using: az ad sp create-for-rbac --name "github-actions" --role contributor --scopes /subscriptions/{subscription-id}
       - name: Login to Azure
         uses: azure/login@v2
         with:

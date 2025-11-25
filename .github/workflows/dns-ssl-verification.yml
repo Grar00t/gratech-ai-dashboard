@@ -145,9 +145,21 @@ jobs:
             exit 0
           fi
           
-          EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s 2>/dev/null || date -j -f "%b %d %H:%M:%S %Y %Z" "$EXPIRY_DATE" +%s 2>/dev/null)
+          # Use openssl to get expiry in epoch format directly for portability
+          EXPIRY_EPOCH=$(echo | openssl s_client -servername "$DOMAIN" -connect "$DOMAIN":443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 | xargs -I {} date -d {} +%s 2>/dev/null || echo "0")
           CURRENT_EPOCH=$(date +%s)
-          DAYS_REMAINING=$(( (EXPIRY_EPOCH - CURRENT_EPOCH) / 86400 ))
+          
+          if [ "$EXPIRY_EPOCH" = "0" ] || [ -z "$EXPIRY_EPOCH" ]; then
+            # Fallback: try to parse the date string directly
+            EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s 2>/dev/null || echo "0")
+          fi
+          
+          if [ "$EXPIRY_EPOCH" = "0" ] || [ -z "$EXPIRY_EPOCH" ]; then
+            echo "⚠️ Could not calculate days remaining"
+            DAYS_REMAINING=0
+          else
+            DAYS_REMAINING=$(( (EXPIRY_EPOCH - CURRENT_EPOCH) / 86400 ))
+          fi
           
           echo "days=$DAYS_REMAINING" >> $GITHUB_OUTPUT
           
