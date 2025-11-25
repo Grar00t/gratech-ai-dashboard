@@ -114,6 +114,8 @@ jobs:
     needs: docker
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write
     environment:
       name: production
       url: ${{ steps.deploy.outputs.webapp-url }}
@@ -144,6 +146,8 @@ jobs:
     needs: deploy
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository

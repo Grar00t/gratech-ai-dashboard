@@ -10,6 +10,10 @@ on:
     # Run daily at midnight UTC
     - cron: "0 0 * * *"
 
+# Minimal permissions for security
+permissions:
+  contents: read
+
 env:
   PRODUCTION_ENDPOINT: https://api.gratech.sa
   HEALTH_ENDPOINT: https://api.gratech.sa/health

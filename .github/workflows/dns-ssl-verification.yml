@@ -11,6 +11,10 @@ on:
         required: false
         default: "api.gratech.sa"
 
+# Minimal permissions for security
+permissions:
+  contents: read
+
 env:
   PRIMARY_DOMAIN: api.gratech.sa
   CNAME_TARGET: gratech-api-gateway.azure-api.net
