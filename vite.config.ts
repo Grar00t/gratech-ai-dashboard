@@ -1,12 +1,14 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/gratech-ai-dashboard/',
-  build: {
-    outDir: 'dist',
-    assetsDir: 'assets',
-    sourcemap: false,
+  resolve: {
+    alias: {
+      '@': path.resolve('./'),
+    },
   },
-})
+  base: '/gratech-ai-dashboard/', // Assumes repository name is gratech-ai-dashboard
+});
