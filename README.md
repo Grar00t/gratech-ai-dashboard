@@ -1,20 +1,62 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 🧠 Gratech Super Brain
+### The Unified AI Intelligence Gateway
 
-# Run and deploy your AI Studio app
+![Azure](https://img.shields.io/badge/azure-%230072C6.svg?style=for-the-badge&logo=microsoftazure&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
 
-This contains everything you need to run your app locally.
+## 🚀 Overview
+**Gratech Super Brain** is a next-generation AI dashboard that orchestrates the world's most powerful language models into a single, cohesive interface. Instead of relying on a single AI provider, this system leverages a "Council of Minds" approach:
 
-View your app in AI Studio: https://ai.studio/apps/drive/1Okixw5-QBp0ig4v6UI9kaN8l4dc_Tzxj
+*   **DeepSeek-V3:** For deep reasoning and code generation.
+*   **Llama-3.1-405B:** For broad knowledge and open-source intelligence.
+*   **GPT-5 (Preview):** For state-of-the-art conversational context and nuance.
 
-## Run Locally
+This project demonstrates a production-ready architecture using **Azure Web Apps**, **Docker Containers**, and a **FastAPI** backend, fully secured and scalable.
 
-**Prerequisites:**  Node.js
+## ✨ Key Features
+*   **Unified API Gateway:** A single endpoint to query multiple AI giants.
+*   **Real-Time Intelligence:** Low-latency responses optimized via Azure Cloud.
+*   **Secure Architecture:** Enterprise-grade security with Azure Key Vault & App Settings (No hardcoded secrets).
+*   **Modern UI:** A sleek, responsive React frontend for seamless interaction.
 
+## 🛠️ Tech Stack
+*   **Frontend:** React, TypeScript, Vite, TailwindCSS.
+*   **Backend:** Python 3.11, FastAPI, OpenAI SDK (Azure Adapter).
+*   **Infrastructure:** Azure Web App for Containers, Azure Container Registry (ACR).
+*   **DevOps:** Docker, Git.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🌐 Live Demo
+Access the live Super Brain dashboard here:
+[**Launch Gratech Super Brain**](https://gratech-dash-live.azurewebsites.net)
+
+## 📦 Installation & Setup
+
+### Prerequisites
+*   Docker
+*   Azure CLI
+*   Node.js 18+
+
+### Local Development
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/Grar00t/gratech-ai-dashboard.git
+    ```
+2.  **Backend Setup:**
+    ```bash
+    cd backend
+    pip install -r requirements.txt
+    uvicorn main:app --reload
+    ```
+3.  **Frontend Setup:**
+    ```bash
+    npm install
+    npm run dev
+    ```
+
+## 🤝 Contributing
+Open source is at the heart of innovation. Feel free to fork this repository, submit Pull Requests, or suggest new features.
+
+---
+*Built with ❤️ by Gratech*
