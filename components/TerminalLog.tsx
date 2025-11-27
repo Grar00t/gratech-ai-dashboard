@@ -10,34 +10,26 @@ interface LogEntry {
 const initialLogs: LogEntry[] = [
   { timestamp: "12:00:01", level: "INFO", message: "Initializing Comet Backbone verification sequence..." },
   { timestamp: "12:00:03", level: "SUCCESS", message: "Azure connection established. Identity verified." },
-  { timestamp: "12:00:08", level: "SUCCESS", message: "APIM Service Status: Online (Running)." },
   { timestamp: "12:00:15", level: "SUCCESS", message: "Certificate 'api-gratech-cert' found. Valid." },
-  { timestamp: "12:00:20", level: "INFO", message: "Querying ns1-06.azure-dns.com..." },
-  { timestamp: "12:00:21", level: "SUCCESS", message: "CNAME record found: api.gratech.sa -> gratech-api-gateway.azure-api.net" },
-  { timestamp: "12:00:25", level: "INFO", message: "Checking Global DNS Resolvers (Batch 1)..." },
-  { timestamp: "12:00:27", level: "SUCCESS", message: "Google DNS (8.8.8.8): RESOLVED" },
-  { timestamp: "12:00:27", level: "SUCCESS", message: "Cloudflare DNS (1.1.1.1): RESOLVED" },
-  { timestamp: "12:00:30", level: "INFO", message: "Checking Regional & Specialist Resolvers (Batch 2)..." },
-  { timestamp: "12:00:31", level: "SUCCESS", message: "Neustar UltraDNS: RESOLVED (Latency: 12ms)" },
-  { timestamp: "12:00:32", level: "SUCCESS", message: "CleanBrowsing Security: RESOLVED (Latency: 18ms)" },
-  { timestamp: "12:00:33", level: "WARN", message: "Yandex DNS: Higher latency detected (124ms) - Retrying packet..." },
-  { timestamp: "12:00:34", level: "SUCCESS", message: "Norton Safe Connect: RESOLVED (Latency: 22ms)" },
-  { timestamp: "12:00:35", level: "SUCCESS", message: "STC DNS (KSA): RESOLVED (Latency: 45ms)" },
-  { timestamp: "12:01:00", level: "INFO", message: "Triggering APIM Custom Domain Binding..." },
-  { timestamp: "12:01:05", level: "WARN", message: "APIM Binding: Validation taking longer than expected (5000ms)..." },
-  { timestamp: "12:12:00", level: "SUCCESS", message: "Backbone Declaration: SYSTEM 75% OPERATIONAL" },
-  { timestamp: "12:12:10", level: "INFO", message: "Executing automated endpoint verification test..." },
-  { timestamp: "12:12:12", level: "INFO", message: "Running 'ensure_cname_record()' script..." },
-  { timestamp: "12:12:13", level: "SUCCESS", message: "CNAME integrity verified in Azure DNS Zone." },
-  { timestamp: "12:12:14", level: "INFO", message: "Checking SSL Certificate Validity & Expiration..." },
+  { timestamp: "12:00:20", level: "INFO", message: "Checking Azure DNS Zone configuration (gratech-resources)..." },
+  { timestamp: "12:00:21", level: "SUCCESS", message: "Zone 'gratech.sa' found. NS records: ns1-08.azure-dns.com" },
+  { timestamp: "12:00:22", level: "INFO", message: "Verifying CNAME record 'api' in Azure Zone..." },
+  { timestamp: "12:00:22", level: "SUCCESS", message: "CNAME Verified: api -> gratech-api-gateway.azure-api.net" },
+  { timestamp: "12:00:25", level: "INFO", message: "Starting Global Propagation Check..." },
+  { timestamp: "12:00:27", level: "SUCCESS", message: "STC DNS (KSA): RESOLVED (Immediate update confirmed)" },
+  { timestamp: "12:00:28", level: "INFO", message: "Querying Google DNS (8.8.8.8)..." },
+  { timestamp: "12:00:29", level: "ERROR", message: "Google DNS returned NXDOMAIN. Record not found." },
+  { timestamp: "12:00:30", level: "WARN", message: "INVESTIGATION TRIGGERED: Propagation mismatch detected." },
+  { timestamp: "12:00:31", level: "INFO", message: "Direct Query to Authoritative NS (ns1-08.azure-dns.com)..." },
+  { timestamp: "12:00:32", level: "SUCCESS", message: "Authoritative Response: NOERROR. CNAME exists." },
+  { timestamp: "12:00:33", level: "INFO", message: "Diagnosis: Stale Cache / TTL Delay on public resolvers." },
+  { timestamp: "12:00:35", level: "INFO", message: "Action: Monitoring TTL expiration (Wait 15-60m)." },
+  { timestamp: "12:01:00", level: "SUCCESS", message: "Neustar UltraDNS: RESOLVED" },
+  { timestamp: "12:01:05", level: "SUCCESS", message: "CleanBrowsing Security: RESOLVED" },
+  { timestamp: "12:12:00", level: "SUCCESS", message: "Backbone Declaration: SYSTEM 80% OPERATIONAL" },
+  { timestamp: "12:12:10", level: "INFO", message: "APIM Custom Domain Binding: Active." },
   { timestamp: "12:12:14", level: "SUCCESS", message: "SSL Valid. NotAfter: 2026-02-22 (> 30 days)." },
-  { timestamp: "12:12:15", level: "INFO", message: "Polling Azure APIM status..." },
-  { timestamp: "12:12:16", level: "INFO", message: "Verifying Custom Domain Binding via Azure ARM..." },
-  { timestamp: "12:12:17", level: "SUCCESS", message: "APIM Binding Status: Succeeded." },
-  { timestamp: "12:12:18", level: "INFO", message: "Auto-healing monitor active. Watchdog running." },
-  { timestamp: "12:12:25", level: "ERROR", message: "Simulated Packet Drop: Auxiliary Node #4 unreachable." },
-  { timestamp: "12:12:26", level: "INFO", message: "Initiating self-healing routing protocol..." },
-  { timestamp: "12:12:27", level: "SUCCESS", message: "Traffic rerouted. Service continuity maintained." },
+  { timestamp: "12:12:25", level: "INFO", message: "Live Monitoring: Waiting for Google DNS cache flush..." },
   { timestamp: "12:12:30", level: "INFO", message: "Matrix telemetry stream established. Monitoring active." }
 ];
 
@@ -64,7 +56,7 @@ export const TerminalLog: React.FC = () => {
         const newLog: LogEntry = {
           timestamp,
           level: 'INFO',
-          message: `Heartbeat check: System nominal. Active threads: ${Math.floor(Math.random() * 20) + 5}`
+          message: `Heartbeat check: Watching Google DNS propagation...`
         };
         setLogs(prev => [...prev, newLog]);
       }
@@ -90,7 +82,7 @@ export const TerminalLog: React.FC = () => {
       <div className="bg-slate-800 px-4 py-2 flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-700 gap-3 sm:gap-0">
         <div className="flex items-center space-x-2 text-slate-400">
           <Terminal size={16} />
-          <span className="text-xs font-semibold">COMET-CLI // STREAM</span>
+          <span className="text-xs font-semibold">COMET-CLI // DIAGNOSTIC MODE</span>
         </div>
         
         {/* Filters */}
@@ -156,7 +148,7 @@ export const TerminalLog: React.FC = () => {
         {filter === 'ALL' && (
            <div className="flex items-center gap-2 mt-2 text-cyan-500/50 animate-pulse text-xs">
               <span className="mr-2">➜</span>
-              <span>Awaiting input stream...</span>
+              <span>Running connectivity diagnostics...</span>
               <span className="w-2 h-4 bg-cyan-500/50 block animate-pulse"></span>
            </div>
         )}
