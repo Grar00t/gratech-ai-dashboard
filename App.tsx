@@ -6,6 +6,7 @@ import { StatusCards } from './components/StatusCards';
 import { BackboneDeclaration } from './components/BackboneDeclaration';
 import { DNSMonitor } from './components/DNSMonitor';
 import { EndpointHealth } from './components/EndpointHealth';
+import { SuperBrain } from './components/SuperBrain';
 import { ExternalLink } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -41,6 +42,11 @@ const App: React.FC = () => {
 
         {/* Status Metrics Grid */}
         <StatusCards />
+
+        {/* Super Brain Interface */}
+        <div className="mb-8">
+          <SuperBrain />
+        </div>
 
         {/* Detailed Global DNS Monitor */}
         <div className="mb-8">
