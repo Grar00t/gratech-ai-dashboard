@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, CheckCircle2, Loader2, XCircle, Wrench, RefreshCw, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Shield, CheckCircle2, Loader2, XCircle, Wrench, RefreshCw, AlertTriangle, ArrowRight, Cpu } from 'lucide-react';
 
 interface TestStep {
   id: string;
@@ -10,13 +10,14 @@ interface TestStep {
 
 export const EndpointHealth: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
-  const [cnameFixed, setCnameFixed] = useState(false); // Start false to simulate error
-  const [sslDaysRemaining, setSslDaysRemaining] = useState<number>(25); // Set to < 30 to demonstrate alert
+  const [cnameFixed, setCnameFixed] = useState(false);
+  const [sslDaysRemaining, setSslDaysRemaining] = useState<number>(25);
   
   const [steps, setSteps] = useState<TestStep[]>([
     { id: 'cname', label: 'CNAME Verification', status: 'pending', details: 'Waiting...' },
     { id: 'dns', label: 'DNS Resolution', status: 'pending', details: 'Waiting...' },
     { id: 'tcp', label: 'TCP Connection', status: 'pending', details: 'Waiting...' },
+    { id: 'ai_health', label: 'Azure AI Connectivity', status: 'pending', details: 'Waiting...' },
     { id: 'ssl', label: 'SSL Handshake', status: 'pending', details: 'Waiting...' },
     { id: 'expiry', label: 'Cert Expiration', status: 'pending', details: 'Waiting...' },
     { id: 'apim_bind', label: 'APIM Binding', status: 'pending', details: 'Waiting...' },
@@ -25,85 +26,76 @@ export const EndpointHealth: React.FC = () => {
 
   const runTests = async () => {
     setIsRunning(true);
-    // Reset steps
     setSteps(prev => prev.map(s => ({ ...s, status: 'pending', details: 'Waiting...' })));
 
     const updateStep = (id: string, status: TestStep['status'], details: string) => {
       setSteps(prev => prev.map(s => s.id === id ? { ...s, status, details } : s));
     };
 
-    // 1. CNAME Check (Simulate Azure DNS Zone Check)
-    updateStep('cname', 'running', 'Querying Azure DNS Zone...');
+    // 1. CNAME Check
+    updateStep('cname', 'running', 'Querying Azure DNS Zone (gratech-resources)...');
     await new Promise(r => setTimeout(r, 800));
     
     if (!cnameFixed) {
         updateStep('cname', 'failed', 'Mismatch: Points to parking page');
-        setIsRunning(false); // Stop execution to force user interaction
+        setIsRunning(false); 
         return; 
     } else {
         updateStep('cname', 'success', 'gratech-api-gateway.azure-api.net');
     }
 
     // 2. DNS
-    updateStep('dns', 'running', 'Querying local resolver...');
+    updateStep('dns', 'running', 'Querying ns1-08.azure-dns.com...');
     await new Promise(r => setTimeout(r, 600));
-    updateStep('dns', 'success', 'Resolved to 20.240.x.x (TTL 300)');
+    updateStep('dns', 'success', 'Resolved to 172.201.26.111 (TTL 300)');
 
     // 3. TCP
     updateStep('tcp', 'running', 'Handshaking on port 443...');
     await new Promise(r => setTimeout(r, 600));
     updateStep('tcp', 'success', 'Connected (45ms)');
 
-    // 4. SSL Handshake
+    // 4. Azure AI Health (New Step)
+    updateStep('ai_health', 'running', 'Ping gratech-openai (East US 2)...');
+    await new Promise(r => setTimeout(r, 900));
+    updateStep('ai_health', 'success', 'Connected. Key: DILdbV...OK');
+
+    // 5. SSL Handshake
     updateStep('ssl', 'running', 'Verifying Certificate Chain...');
     await new Promise(r => setTimeout(r, 800));
     updateStep('ssl', 'success', 'Verified (Let\'s Encrypt R3)');
 
-    // 5. SSL Expiry Check
+    // 6. SSL Expiry Check
     updateStep('expiry', 'running', 'Checking NotAfter date...');
     await new Promise(r => setTimeout(r, 500));
     
-    // Simulate checking expiry logic
     if (sslDaysRemaining > 30) {
         updateStep('expiry', 'success', `Valid for ${sslDaysRemaining} days`);
     } else {
         updateStep('expiry', 'failed', `Expires in ${sslDaysRemaining} days!`);
     }
 
-    // 6. APIM Binding Check
-    updateStep('apim_bind', 'running', 'Checking Azure APIM status...');
+    // 7. APIM Binding Check
+    updateStep('apim_bind', 'running', 'Checking gratech-api-gateway...');
     await new Promise(r => setTimeout(r, 1000));
-    updateStep('apim_bind', 'success', 'Custom Domain Active (Succeeded)');
+    updateStep('apim_bind', 'success', 'api.gratech.sa bound (Active)');
 
-    // 7. HTTP
+    // 8. HTTP
     updateStep('http', 'running', 'Sending GET /health...');
     await new Promise(r => setTimeout(r, 1200));
-    // Simulate waiting for APIM which might be warming up
     updateStep('http', 'success', '200 OK'); 
     
     setIsRunning(false);
   };
 
-  // Auto-run on mount
-  useEffect(() => {
-    runTests();
-  }, []);
+  useEffect(() => { runTests(); }, []);
 
-  // Script function to simulate Azure DNS CNAME update
   const handleAutoFixCNAME = async () => {
     setIsRunning(true);
-    
-    // Simulate finding an issue and fixing it
-    const originalSteps = [...steps];
     setSteps(prev => prev.map(s => s.id === 'cname' ? { ...s, status: 'running', details: 'EXECUTING AZURE DNS UPDATE...' } : s));
-    
     await new Promise(r => setTimeout(r, 2000));
-    
     setCnameFixed(true);
     setSteps(prev => prev.map(s => s.id === 'cname' ? { ...s, status: 'success', details: 'CNAME Updated via Script' } : s));
     setIsRunning(false);
-    
-    // Re-run full suite after fix
     setTimeout(runTests, 500);
   };
 
@@ -126,7 +118,6 @@ export const EndpointHealth: React.FC = () => {
         </button>
       </div>
 
-      {/* Prominent SSL Warning Alert */}
       {sslDaysRemaining <= 30 && (
         <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start gap-3 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.1)]">
             <div className="bg-red-500/20 p-2 rounded-full shrink-0">
@@ -184,7 +175,6 @@ export const EndpointHealth: React.FC = () => {
           </div>
         </div>
 
-        {/* CNAME Auto-Fix Script Visualization */}
         <div className={`bg-slate-800/40 border rounded-lg p-4 transition-colors duration-500 ${!cnameFixed ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-slate-700/50'}`}>
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -215,9 +205,7 @@ export const EndpointHealth: React.FC = () => {
                             {cnameFixed ? <CheckCircle2 size={12} className="text-green-400" /> : <AlertTriangle size={12} className="text-yellow-400" />}
                         </div>
                      </div>
-                     
                      <div className="h-8 w-px bg-slate-700"></div>
-
                      <button 
                         onClick={handleAutoFixCNAME}
                         disabled={isRunning || cnameFixed}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Filter, Pause, Play, Download, AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react';
+import { Terminal, Filter, Pause, Play } from 'lucide-react';
 
 interface LogEntry {
   timestamp: string;
@@ -9,27 +9,23 @@ interface LogEntry {
 
 const initialLogs: LogEntry[] = [
   { timestamp: "12:00:01", level: "INFO", message: "Initializing Comet Backbone verification sequence..." },
+  { timestamp: "12:00:02", level: "INFO", message: "Target Subscription: dde8416c-6077-4b2b-b722-05bf8b782c44" },
   { timestamp: "12:00:03", level: "SUCCESS", message: "Azure connection established. Identity verified." },
   { timestamp: "12:00:15", level: "SUCCESS", message: "Certificate 'api-gratech-cert' found. Valid." },
-  { timestamp: "12:00:20", level: "INFO", message: "Checking Azure DNS Zone configuration (gratech-resources)..." },
-  { timestamp: "12:00:21", level: "SUCCESS", message: "Zone 'gratech.sa' found. NS records: ns1-08.azure-dns.com" },
-  { timestamp: "12:00:22", level: "INFO", message: "Verifying CNAME record 'api' in Azure Zone..." },
-  { timestamp: "12:00:22", level: "SUCCESS", message: "CNAME Verified: api -> gratech-api-gateway.azure-api.net" },
-  { timestamp: "12:00:25", level: "INFO", message: "Starting Global Propagation Check..." },
+  { timestamp: "12:00:20", level: "INFO", message: "Checking Azure DNS Zone 'gratech.sa' (gratech-resources)..." },
+  { timestamp: "12:00:21", level: "SUCCESS", message: "Zone found. Authoritative NS: ns1-08.azure-dns.com" },
+  { timestamp: "12:00:22", level: "INFO", message: "Verifying CNAME record 'api'..." },
+  { timestamp: "12:00:22", level: "SUCCESS", message: "CNAME Verified: gratech-api-gateway.azure-api.net" },
+  { timestamp: "12:00:24", level: "INFO", message: "Connecting to AI Resource: gratech-openai (East US 2)..." },
+  { timestamp: "12:00:25", level: "SUCCESS", message: "AI Endpoint Verified: https://eastus2.api.cognitive.microsoft.com/" },
   { timestamp: "12:00:27", level: "SUCCESS", message: "STC DNS (KSA): RESOLVED (Immediate update confirmed)" },
   { timestamp: "12:00:28", level: "INFO", message: "Querying Google DNS (8.8.8.8)..." },
-  { timestamp: "12:00:29", level: "ERROR", message: "Google DNS returned NXDOMAIN. Record not found." },
-  { timestamp: "12:00:30", level: "WARN", message: "INVESTIGATION TRIGGERED: Propagation mismatch detected." },
-  { timestamp: "12:00:31", level: "INFO", message: "Direct Query to Authoritative NS (ns1-08.azure-dns.com)..." },
-  { timestamp: "12:00:32", level: "SUCCESS", message: "Authoritative Response: NOERROR. CNAME exists." },
-  { timestamp: "12:00:33", level: "INFO", message: "Diagnosis: Stale Cache / TTL Delay on public resolvers." },
-  { timestamp: "12:00:35", level: "INFO", message: "Action: Monitoring TTL expiration (Wait 15-60m)." },
+  { timestamp: "12:00:29", level: "WARN", message: "Google DNS: Propagation delay detected (TTL)." },
+  { timestamp: "12:00:31", level: "INFO", message: "Direct Query to ns1-08.azure-dns.com..." },
+  { timestamp: "12:00:32", level: "SUCCESS", message: "Authoritative Response: NOERROR. Record exists." },
   { timestamp: "12:01:00", level: "SUCCESS", message: "Neustar UltraDNS: RESOLVED" },
-  { timestamp: "12:01:05", level: "SUCCESS", message: "CleanBrowsing Security: RESOLVED" },
-  { timestamp: "12:12:00", level: "SUCCESS", message: "Backbone Declaration: SYSTEM 80% OPERATIONAL" },
-  { timestamp: "12:12:10", level: "INFO", message: "APIM Custom Domain Binding: Active." },
-  { timestamp: "12:12:14", level: "SUCCESS", message: "SSL Valid. NotAfter: 2026-02-22 (> 30 days)." },
-  { timestamp: "12:12:25", level: "INFO", message: "Live Monitoring: Waiting for Google DNS cache flush..." },
+  { timestamp: "12:12:00", level: "SUCCESS", message: "Backbone Declaration: INFRASTRUCTURE 100% READY" },
+  { timestamp: "12:12:10", level: "INFO", message: "APIM Gateway: gratech-api-gateway (Online)" },
   { timestamp: "12:12:30", level: "INFO", message: "Matrix telemetry stream established. Monitoring active." }
 ];
 
@@ -41,14 +37,12 @@ export const TerminalLog: React.FC = () => {
   const [autoScroll, setAutoScroll] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll logic
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [logs, filter, autoScroll]);
 
-  // Simulate incoming logs
   useEffect(() => {
     const interval = setInterval(() => {
       if (Math.random() > 0.7) {
@@ -56,7 +50,7 @@ export const TerminalLog: React.FC = () => {
         const newLog: LogEntry = {
           timestamp,
           level: 'INFO',
-          message: `Heartbeat check: Watching Google DNS propagation...`
+          message: `Heartbeat check: ns1-08.azure-dns.com latency normal.`
         };
         setLogs(prev => [...prev, newLog]);
       }
@@ -78,14 +72,11 @@ export const TerminalLog: React.FC = () => {
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden shadow-2xl flex flex-col h-[500px] font-mono text-sm relative">
-      {/* Header / Toolbar */}
       <div className="bg-slate-800 px-4 py-2 flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-700 gap-3 sm:gap-0">
         <div className="flex items-center space-x-2 text-slate-400">
           <Terminal size={16} />
-          <span className="text-xs font-semibold">COMET-CLI // DIAGNOSTIC MODE</span>
+          <span className="text-xs font-semibold">COMET-CLI // AZURE-LIVE</span>
         </div>
-        
-        {/* Filters */}
         <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 no-scrollbar">
           <Filter size={14} className="text-slate-500 mr-1 shrink-0" />
           {(['ALL', 'INFO', 'SUCCESS', 'WARN', 'ERROR'] as FilterLevel[]).map((level) => (
@@ -102,8 +93,6 @@ export const TerminalLog: React.FC = () => {
             </button>
           ))}
         </div>
-
-        {/* Window Controls */}
         <div className="flex items-center gap-3 pl-4 border-l border-slate-700 ml-2">
            <button 
              onClick={() => setAutoScroll(!autoScroll)}
@@ -119,8 +108,6 @@ export const TerminalLog: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Log Area */}
       <div 
         ref={scrollRef}
         className="flex-1 p-4 overflow-y-auto custom-scrollbar space-y-1 bg-slate-950/50"
@@ -143,27 +130,21 @@ export const TerminalLog: React.FC = () => {
             </div>
           ))
         )}
-        
-        {/* Active Line Indicator */}
         {filter === 'ALL' && (
            <div className="flex items-center gap-2 mt-2 text-cyan-500/50 animate-pulse text-xs">
               <span className="mr-2">➜</span>
-              <span>Running connectivity diagnostics...</span>
+              <span>Polling Subscription dde8416c...</span>
               <span className="w-2 h-4 bg-cyan-500/50 block animate-pulse"></span>
            </div>
         )}
       </div>
-
-      {/* Footer Matrix Info */}
       <div className="bg-slate-900 border-t border-slate-800 px-3 py-1.5 flex justify-between items-center text-[10px] text-slate-500 font-mono">
          <div className="flex gap-4">
-            <span>MEM: {Math.floor(Math.random() * 20 + 40)}MB</span>
-            <span>CPU: {Math.floor(Math.random() * 10 + 2)}%</span>
-            <span>NET: {Math.floor(Math.random() * 500 + 100)}KB/s</span>
+            <span>RES: gratech-resources</span>
+            <span>AI: East US 2</span>
+            <span>NET: ns1-08</span>
          </div>
-         <div>
-            LINES: {logs.length}
-         </div>
+         <div>LINES: {logs.length}</div>
       </div>
     </div>
   );

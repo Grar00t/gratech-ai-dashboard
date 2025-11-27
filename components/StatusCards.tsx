@@ -21,7 +21,7 @@ export const StatusCards: React.FC = () => {
         <div className="w-full bg-slate-800 rounded-full h-1.5 mb-2">
             <div className="bg-gradient-to-r from-blue-600 to-cyan-400 h-1.5 rounded-full" style={{ width: '75%' }}></div>
         </div>
-        <p className="text-xs text-slate-500">Propagation active</p>
+        <p className="text-xs text-slate-500">api.gratech.sa (Propagating)</p>
       </div>
 
       {/* Card 2: Server */}
@@ -41,7 +41,7 @@ export const StatusCards: React.FC = () => {
         <div className="w-full bg-slate-800 rounded-full h-1.5 mb-2">
             <div className="bg-cyan-500 h-1.5 rounded-full" style={{ width: '100%' }}></div>
         </div>
-        <p className="text-xs text-slate-500">Azure Resources Active</p>
+        <p className="text-xs text-slate-500">gratech-api-gateway (Active)</p>
       </div>
 
        {/* Card 3: SSL */}
@@ -84,7 +84,7 @@ export const StatusCards: React.FC = () => {
         <div className="w-full bg-slate-800 rounded-full h-1.5 mb-2 overflow-hidden">
              <div className="bg-yellow-500 h-1.5 rounded-full animate-[progress_2s_ease-in-out_infinite]" style={{ width: '85%' }}></div>
         </div>
-        <p className="text-xs text-slate-500">Awaiting APIM binding</p>
+        <p className="text-xs text-slate-500">Propagation Pending</p>
       </div>
     </div>
   );
