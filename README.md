@@ -27,9 +27,11 @@ This project demonstrates a production-ready architecture using **Azure Web Apps
 *   **Infrastructure:** Azure Web App for Containers, Azure Container Registry (ACR).
 *   **DevOps:** Docker, Git.
 
-## 🌐 Live Demo
-Access the live Super Brain dashboard here:
-[**Launch Gratech Super Brain**](https://gratech-dash-live.azurewebsites.net)
+## 🌐 Live Platform
+> **Note:** The GraTech AI Platform is now hosted on a dedicated server at `172.201.26.111`. The domain `gratech.sa` points directly to this server and is no longer served via GitHub Pages.
+
+Access the live GraTech AI Platform here:
+[**Launch GraTech AI Platform**](https://gratech.sa)
 
 ## 📦 Installation & Setup
 
