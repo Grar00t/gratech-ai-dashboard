@@ -28,7 +28,7 @@ This project demonstrates a production-ready architecture using **Azure Web Apps
 *   **DevOps:** Docker, Git.
 
 ## 🌐 Live Platform
-> **Note:** The GraTech AI Platform is now hosted on a dedicated server at `172.201.26.111`. The domain `gratech.sa` points directly to this server and is no longer served via GitHub Pages.
+> **Note:** The GraTech AI Platform is now hosted on a dedicated server. The domain `gratech.sa` points directly to this server and is no longer served via GitHub Pages.
 
 Access the live GraTech AI Platform here:
 [**Launch GraTech AI Platform**](https://gratech.sa)
