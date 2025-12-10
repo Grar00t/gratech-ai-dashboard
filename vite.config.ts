@@ -10,5 +10,4 @@ export default defineConfig({
       '@': path.resolve('./'),
     },
   },
-  base: '/gratech-ai-dashboard/', // Assumes repository name is gratech-ai-dashboard
-});
+  base: '/', // FIXED: Changed from '/gratech-ai-dashboard/' for Azure Web App deployment});
